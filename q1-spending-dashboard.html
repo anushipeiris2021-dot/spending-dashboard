@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Q1 2026 Spending Dashboard</title>
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --card: #ffffff;
+    --ink: #1d2733;
+    --muted: #5d6b7c;
+    --line: #e1e6ed;
+    --grid: #e8ecf1;
+    --hover: rgba(91, 107, 130, 0.1);
+    --bar: #5b6b82;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12171e; --card: #1b232d; --ink: #e8edf3; --muted: #9aa8b8;
+      --line: #2b3643; --grid: #2b3643; --hover: rgba(159, 176, 200, 0.14); --bar: #9fb0c8;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12171e; --card: #1b232d; --ink: #e8edf3; --muted: #9aa8b8;
+    --line: #2b3643; --grid: #2b3643; --hover: rgba(159, 176, 200, 0.14); --bar: #9fb0c8;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.4;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 28px 20px 40px; }
+  h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 650; letter-spacing: -0.01em; }
+  .sub { margin: 4px 0 24px; color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 14px; }
+  .tile, .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+  .tile { padding: 18px 20px; }
+  .tile-label { color: var(--muted); font-size: 0.9rem; }
+  .tile-value { font-size: 2rem; font-weight: 650; margin: 2px 0; letter-spacing: -0.01em; }
+  .tile-sub { color: var(--muted); font-size: 0.88rem; }
+  .charts { display: grid; grid-template-columns: 1.25fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .charts { grid-template-columns: 1fr; } }
+  .panel { padding: 18px 20px 14px; min-width: 0; }
+  .panel h2 { margin: 0 0 12px; font-size: 1.05rem; font-weight: 600; }
+  .recharts-text, .recharts-cartesian-axis-tick-value { fill: var(--muted); font-size: 13px; }
+  .recharts-cartesian-grid line { stroke: var(--grid); }
+  .recharts-cartesian-axis-line, .recharts-cartesian-axis-tick-line { stroke: var(--line); }
+  .legend { list-style: none; margin: 8px 0 0; padding: 0; font-size: 0.92rem; }
+  .legend li { display: grid; grid-template-columns: 14px 1fr auto 44px; gap: 8px; align-items: center; padding: 4px 0; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; }
+  .lv { font-variant-numeric: tabular-nums; }
+  .lp { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-is@18.3.1/umd/react-is.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.js"></script>
+<script>
+const CSV = `date,category,amount_usd,notes
+2026-01-04,Food,42.80,Groceries
+2026-01-07,Transport,18.50,Subway pass top-up
+2026-01-09,Subscriptions,9.99,Streaming
+2026-01-12,Entertainment,24.00,Movie night
+2026-01-15,Utilities,78.40,Electricity
+2026-01-18,Food,31.20,Groceries
+2026-01-22,Transport,12.75,Rideshare
+2026-01-26,Food,58.10,Dinner out
+2026-01-29,Subscriptions,14.99,Cloud storage
+2026-02-02,Utilities,64.20,Internet
+2026-02-05,Food,46.30,Groceries
+2026-02-08,Entertainment,32.00,Concert ticket
+2026-02-11,Transport,22.40,Rideshare
+2026-02-14,Food,72.00,Restaurant
+2026-02-17,Subscriptions,9.99,Streaming
+2026-02-20,Food,38.90,Groceries
+2026-02-23,Utilities,55.80,Electricity
+2026-02-26,Entertainment,18.50,Streaming rental
+2026-03-01,Transport,18.50,Subway pass top-up
+2026-03-04,Food,44.60,Groceries
+2026-03-07,Subscriptions,14.99,Cloud storage
+2026-03-10,Entertainment,28.00,Game pass
+2026-03-13,Food,33.10,Groceries
+2026-03-16,Utilities,81.20,Electricity
+2026-03-19,Transport,15.00,Rideshare
+2026-03-22,Food,52.40,Dinner out
+2026-03-25,Entertainment,40.00,Event ticket
+2026-03-28,Food,36.20, Groceries
+2026-03-30,Subscriptions,9.99,Streaming`;
+
+const rows = CSV.split("\n").slice(1).map(function (line) {
+  const p = line.split(",");
+  return { date: p[0], category: p[1], amount: parseFloat(p[2]), notes: p.slice(3).join(",") };
+});
+
+const COLORS = {
+  Food: "#2f6fbb", Utilities: "#e0a030", Transport: "#3a9c7c",
+  Entertainment: "#c0577f", Subscriptions: "#8a6fc7"
+};
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const fmt = function (n) { return usd.format(n); };
+const dayLabel = function (s) {
+  return new Date(s + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+};
+
+const total = rows.reduce(function (s, r) { return s + r.amount; }, 0);
+
+const monthMap = {};
+rows.forEach(function (r) {
+  const k = r.date.slice(0, 7);
+  monthMap[k] = (monthMap[k] || 0) + r.amount;
+});
+const monthly = Object.keys(monthMap).sort().map(function (k) {
+  const d = new Date(k + "-01T00:00:00Z");
+  return {
+    name: d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }),
+    full: d.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
+    total: Math.round(monthMap[k] * 100) / 100
+  };
+});
+
+const catMap = {};
+rows.forEach(function (r) { catMap[r.category] = (catMap[r.category] || 0) + r.amount; });
+const cats = Object.keys(catMap).map(function (k) {
+  return { name: k, value: Math.round(catMap[k] * 100) / 100 };
+}).sort(function (a, b) { return b.value - a.value; });
+const top = cats[0];
+const pct = function (v) { return (v / total * 100).toFixed(0) + "%"; };
+
+const dates = rows.map(function (r) { return r.date; }).sort();
+
+const h = React.createElement;
+const R = Recharts;
+
+const tipStyle = {
+  contentStyle: { background: "var(--card)", border: "1px solid var(--line)", borderRadius: 8, color: "var(--ink)" },
+  itemStyle: { color: "var(--ink)" },
+  labelStyle: { color: "var(--ink)", fontWeight: 600 }
+};
+
+function Tile(props) {
+  return h("div", { className: "tile" },
+    h("div", { className: "tile-label" }, props.label),
+    h("div", { className: "tile-value" }, props.value),
+    h("div", { className: "tile-sub" }, props.sub));
+}
+
+function App() {
+  return h(React.Fragment, null,
+    h("h1", null, "Q1 2026 spending"),
+    h("p", { className: "sub" }, dayLabel(dates[0]) + " to " + dayLabel(dates[dates.length - 1]) + ", " + dates[0].slice(0, 4)),
+
+    h("section", { className: "tiles", "aria-label": "Summary" },
+      h(Tile, { label: "Total spending", value: fmt(total), sub: "Across " + monthly.length + " months" }),
+      h(Tile, { label: "Transactions", value: String(rows.length), sub: "Average " + fmt(total / rows.length) + " each" }),
+      h(Tile, { label: "Top category", value: top.name, sub: fmt(top.value) + ", " + pct(top.value) + " of all spending" })
+    ),
+
+    h("section", { className: "charts" },
+      h("div", { className: "panel" },
+        h("h2", null, "Spending per month"),
+        h(R.ResponsiveContainer, { width: "100%", height: 300 },
+          h(R.BarChart, { data: monthly, margin: { top: 8, right: 8, left: 0, bottom: 0 } },
+            h(R.CartesianGrid, { vertical: false }),
+            h(R.XAxis, { dataKey: "name", tickLine: false }),
+            h(R.YAxis, { tickFormatter: function (v) { return "$" + v; }, axisLine: false, tickLine: false, width: 52 }),
+            h(R.Tooltip, Object.assign({}, tipStyle, {
+              cursor: { fill: "var(--hover)" },
+              formatter: function (v) { return [fmt(v), "Total spending"]; },
+              labelFormatter: function (label, payload) { return payload && payload[0] ? payload[0].payload.full : label; }
+            })),
+            h(R.Bar, { dataKey: "total", fill: "var(--bar)", radius: [6, 6, 0, 0], maxBarSize: 80 })
+          )
+        )
+      ),
+      h("div", { className: "panel" },
+        h("h2", null, "Spending by category"),
+        h(R.ResponsiveContainer, { width: "100%", height: 220 },
+          h(R.PieChart, null,
+            h(R.Tooltip, Object.assign({}, tipStyle, {
+              formatter: function (v, name) { return [fmt(v) + " (" + pct(v) + ")", name]; }
+            })),
+            h(R.Pie, { data: cats, dataKey: "value", nameKey: "name", innerRadius: "58%", outerRadius: "92%", paddingAngle: 2, stroke: "var(--card)" },
+              cats.map(function (c) { return h(R.Cell, { key: c.name, fill: COLORS[c.name] }); })
+            )
+          )
+        ),
+        h("ul", { className: "legend" },
+          cats.map(function (c) {
+            return h("li", { key: c.name },
+              h("span", { className: "sw", style: { background: COLORS[c.name] } }),
+              h("span", null, c.name),
+              h("span", { className: "lv" }, fmt(c.value)),
+              h("span", { className: "lp" }, pct(c.value)));
+          })
+        )
+      )
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+</script>
+</body>
+</html>

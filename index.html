@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spending Dashboard</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --card: #ffffff;
+    --ink: #15151c;
+    --muted: #5c5c6b;
+    --grid: #ececf2;
+    --border: #e4e4ec;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0b0f; --card: #15151b; --ink: #f4f4f8; --muted: #a3a3b3;
+      --grid: #2a2a34; --border: #2a2a34;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0b0f; --card: #15151b; --ink: #f4f4f8; --muted: #a3a3b3;
+    --grid: #2a2a34; --border: #2a2a34;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 28px 20px 40px; }
+  h1 { margin: 0 0 4px; font-size: 1.6rem; }
+  .sub { margin: 0 0 24px; color: var(--muted); font-size: 0.95rem; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 16px; }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 18px 20px; }
+  .tile-label { color: var(--muted); font-size: 0.9rem; margin-bottom: 6px; }
+  .tile-value { font-size: 2rem; font-weight: 650; line-height: 1.15; }
+  .tile-note { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  h2 { margin: 0 0 12px; font-size: 1.05rem; }
+  .chart-box { width: 100%; height: 320px; }
+  .recharts-text, .recharts-legend-item-text { fill: var(--muted); font-size: 13px; }
+  .recharts-legend-item-text { color: var(--muted) !important; }
+  .recharts-cartesian-grid line { stroke: var(--grid); }
+  .recharts-cartesian-axis-line, .recharts-cartesian-axis-tick-line { stroke: var(--grid); }
+  .head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 24px; margin-bottom: 24px; }
+  .head .sub { margin: 0; }
+  .filter-wrap { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 0.95rem; }
+  .filter { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 9px 36px 9px 16px; cursor: pointer; }
+  .filter:focus-visible { outline: 3px solid var(--muted); outline-offset: 2px; }
+  :root { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  body { transition: background-color .2s, color .2s; }
+  .head > div:first-child { flex: 1 1 320px; min-width: 0; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-left: auto; }
+  .filter option { background: var(--card); color: var(--ink); }
+  .theme-btn { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 0.95rem; color: var(--ink); background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 9px 16px; cursor: pointer; }
+  .theme-btn:hover { border-color: var(--muted); }
+  .theme-btn:focus-visible { outline: 3px solid var(--muted); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+(function () {
+  var t = null;
+  try { t = localStorage.getItem("spend-theme"); } catch (e) {}
+  if (t !== "dark" && t !== "light") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", t);
+})();
+function fatal(msg) {
+  var r = document.getElementById("root");
+  if (r && !r.children.length) r.innerHTML = '<pre style="padding:20px;white-space:pre-wrap;color:#b3261e">Dashboard failed to start: ' + String(msg).replace(/</g, "&lt;") + '</pre>';
+}
+window.addEventListener("error", function (e) {
+  var t = e.target;
+  if (t && t.tagName === "SCRIPT") { if (!/Recharts/.test(t.src)) fatal("could not load " + t.src); }
+  else fatal(e.message);
+}, true);
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-is@18.3.1/umd/react-is.production.min.js"></script>
+<script>
+const CSV = `date, category, amount used, notes
+2026-01-04, Food,42.80, Groceries
+2026-01-07, Transport,18.50, Subway pass top-up
+2026-01-09, Subscriptions,9.99, Streaming
+2026-01-12, Entertainment,24.00, Movie night
+2026-01-15, Utilities,78.40, Electricity
+2026-01-18, Food,31.20, Groceries
+2026-01-22, Transport,12.75, Rideshare
+2026-01-26, Food,58.10, Dinner out
+2026-01-29, Subscriptions,14.99, Cloud storage
+2026-02-02, Utilities,64.20, Internet
+2026-02-05, Food,46.30, Groceries
+2026-02-08, Entertainment,32.00, Concert ticket
+2026-02-11, Transport,22.40, Rideshare
+2026-02-14, Food,72.00, Restaurant
+2026-02-17, Subscriptions,9.99, Streaming
+2026-02-20, Food,38.90, Groceries
+2026-02-23, Utilities,55.80, Electricity
+2026-02-26, Entertainment,18.50, Streaming rental
+2026-03-01, Transport,18.50, Subway pass top-up
+2026-03-04, Food,44.60, Groceries
+2026-03-07, Subscriptions,14.99, Cloud storage
+2026-03-10, Entertainment,28.00, Game pass
+2026-03-13, Food,33.10, Groceries
+2026-03-16, Utilities,81.20, Electricity
+2026-03-19, Transport,15.00, Rideshare
+2026-03-22, Food,52.40, Dinner out
+2026-03-25, Entertainment,40.00, Event ticket
+2026-03-28, Food,36.20, Groceries
+2026-03-30, Subscriptions,9.99, Streaming`;
+
+const h = React.createElement;
+let R = null;
+const MONTHS = { "01": "Jan 2026", "02": "Feb 2026", "03": "Mar 2026" };
+const COLORS = { Food: "#ff9ec4", Utilities: "#9fe3c1", Entertainment: "#ffcf8a", Transport: "#8fd8f0", Subscriptions: "#c3a6f2" };
+const usd = (n) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+const rows = CSV.trim().split("\n").slice(1).map((line) => {
+  const [date, category, amount] = line.split(",").map((x) => x.trim());
+  return { date, category, amount: parseFloat(amount) };
+});
+
+const round2 = (n) => Math.round(n * 100) / 100;
+const grand = round2(rows.reduce((t, r) => t + r.amount, 0));
+const MONTH_KEYS = Array.from(new Set(rows.map((r) => r.date.slice(5, 7)))).sort();
+const overall = {};
+rows.forEach((r) => { overall[r.category] = (overall[r.category] || 0) + r.amount; });
+const CAT_LIST = Object.keys(overall).sort((x, y) => overall[y] - overall[x]);
+
+let total, count, monthData, catData, topCat, barFill;
+function recompute(cat) {
+  const sel = cat === "All" ? rows : rows.filter((r) => r.category === cat);
+  const mt = {}, ct = {};
+  sel.forEach((r) => {
+    const m = r.date.slice(5, 7);
+    mt[m] = (mt[m] || 0) + r.amount;
+    ct[r.category] = (ct[r.category] || 0) + r.amount;
+  });
+  count = sel.length;
+  total = round2(sel.reduce((t, r) => t + r.amount, 0));
+  monthData = MONTH_KEYS.map((m) => ({ month: MONTHS[m] || m, total: round2(mt[m] || 0) }));
+  catData = Object.keys(ct).map((c) => ({ name: c, value: round2(ct[c]) })).sort((x, y) => y.value - x.value);
+  topCat = catData[0];
+  barFill = cat === "All" ? "#ffa6cf" : (COLORS[cat] || "#ffa6cf");
+}
+recompute("All");
+
+const tipStyle = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, color: "var(--ink)" };
+
+function Tile(props) {
+  return h("div", { className: "panel" },
+    h("div", { className: "tile-label" }, props.label),
+    h("div", { className: "tile-value" }, props.value),
+    h("div", { className: "tile-note" }, props.note));
+}
+
+class Boundary extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  render() {
+    return this.state.err
+      ? h(React.Fragment, null, h("div", { className: "tile-note" }, "Recharts error: " + this.state.err.message), this.props.fallback)
+      : this.props.children;
+  }
+}
+
+function BarChartR() {
+  return h(R.ResponsiveContainer, { width: "100%", height: "100%" },
+    h(R.BarChart, { data: monthData, margin: { top: 8, right: 8, left: 0, bottom: 0 } },
+      h(R.CartesianGrid, { vertical: false }),
+      h(R.XAxis, { dataKey: "month" }),
+      h(R.YAxis, { tickFormatter: (v) => "$" + v }),
+      h(R.Tooltip, { formatter: (v) => [usd(v), "Total spent"], contentStyle: tipStyle, itemStyle: { color: "var(--ink)" }, cursor: { fill: "rgba(255,158,196,0.2)" } }),
+      h(R.Bar, { dataKey: "total", name: "Total spent", fill: barFill, radius: [6, 6, 0, 0], maxBarSize: 72 })));
+}
+
+function DonutR() {
+  return h(R.ResponsiveContainer, { width: "100%", height: "100%" },
+    h(R.PieChart, null,
+      h(R.Pie, { data: catData, dataKey: "value", nameKey: "name", innerRadius: "52%", outerRadius: "80%", paddingAngle: 2, stroke: "none" },
+        catData.map((d) => h(R.Cell, { key: d.name, fill: COLORS[d.name] || "#888" }))),
+      h(R.Tooltip, { formatter: (v, n) => [usd(v) + " (" + Math.round((v / total) * 100) + "%)", n], contentStyle: tipStyle, itemStyle: { color: "var(--ink)" } }),
+      h(R.Legend, { verticalAlign: "bottom" })));
+}
+
+function useTip() {
+  const [t, setT] = React.useState(null);
+  return [t, (e, text) => setT({ x: e.clientX, y: e.clientY, text }), () => setT(null)];
+}
+function TipBox(props) {
+  const t = props.t;
+  return t ? h("div", { style: Object.assign({ position: "fixed", left: t.x + 12, top: t.y + 12, padding: "6px 10px", fontSize: 13, pointerEvents: "none", zIndex: 10 }, tipStyle) }, t.text) : null;
+}
+
+// Plain-SVG versions, used only if the Recharts library cannot load or throws.
+function BarChartFallback() {
+  const [t, show, hide] = useTip();
+  const n = monthData.length, W = 400, H = 260, bw = 80, gap = (W - n * bw) / (n + 1);
+  const max = Math.max.apply(null, monthData.map((d) => d.total)) * 1.1;
+  return h("div", { style: { height: "100%" } },
+    h("svg", { viewBox: "0 0 " + W + " " + (H + 30), style: { width: "100%", height: "100%" } },
+      monthData.map((d, i) => {
+        const bh = (d.total / max) * H, x = gap + i * (bw + gap);
+        return h("g", { key: d.month, onMouseMove: (e) => show(e, d.month + ": " + usd(d.total)), onMouseLeave: hide },
+          h("rect", { x: x, y: H - bh, width: bw, height: bh, rx: 6, fill: barFill }),
+          h("text", { x: x + bw / 2, y: H + 20, textAnchor: "middle", className: "recharts-text" }, d.month),
+          h("text", { x: x + bw / 2, y: H - bh - 6, textAnchor: "middle", className: "recharts-text" }, usd(d.total)));
+      })),
+    h(TipBox, { t: t }));
+}
+function DonutFallback() {
+  const [t, show, hide] = useTip();
+  const C = 2 * Math.PI * 80; let acc = 0;
+  return h("div", { style: { display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: 16, height: "100%" } },
+    h("svg", { viewBox: "0 0 200 200", style: { width: 220, height: 220 } },
+      catData.map((d) => {
+        const len = (d.value / total) * C, off = -acc; acc += len;
+        return h("circle", { key: d.name, cx: 100, cy: 100, r: 80, fill: "none", stroke: COLORS[d.name] || "#888", strokeWidth: 36,
+          strokeDasharray: len + " " + (C - len), strokeDashoffset: off, transform: "rotate(-90 100 100)",
+          onMouseMove: (e) => show(e, d.name + ": " + usd(d.value) + " (" + Math.round((d.value / total) * 100) + "%)"), onMouseLeave: hide });
+      })),
+    h("ul", { style: { listStyle: "none", margin: 0, padding: 0, fontSize: 14, color: "var(--muted)" } },
+      catData.map((d) => h("li", { key: d.name, style: { margin: "4px 0" } },
+        h("span", { style: { display: "inline-block", width: 10, height: 10, borderRadius: 5, background: COLORS[d.name] || "#888", marginRight: 8 } }), d.name))),
+    h(TipBox, { t: t }));
+}
+
+function ThemeToggle(props) {
+  const dark = props.theme === "dark";
+  const svg = (kids) => h("svg", { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, kids);
+  const icon = dark
+    ? svg([h("circle", { key: "c", cx: 12, cy: 12, r: 4 }), h("path", { key: "p", d: "M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" })])
+    : svg(h("path", { d: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" }));
+  const next = dark ? "light" : "dark";
+  return h("button", { type: "button", className: "theme-btn", onClick: props.onToggle, "aria-label": "Switch to " + next + " mode", title: "Switch to " + next + " mode" },
+    icon, h("span", null, dark ? "Light" : "Dark"));
+}
+
+function App() {
+  const [cat, setCat] = React.useState("All");
+  const [theme, setTheme] = React.useState(() => document.documentElement.getAttribute("data-theme") || "light");
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("spend-theme", next); } catch (e) {}
+    setTheme(next);
+  };
+  recompute(cat);
+  const ok = !!R, filtered = cat !== "All", tag = filtered ? " · " + cat : "";
+  return h("div", { className: "wrap" },
+    h("div", { className: "head" },
+      h("div", null,
+        h("h1", null, "Spending dashboard"),
+        h("p", { className: "sub" }, "January to March 2026 · amounts in USD" + (ok ? "" : " · Recharts could not be loaded, so built-in charts are shown"))),
+      h("div", { className: "controls" }, h("label", { className: "filter-wrap" }, "Category",
+        h("select", { className: "filter", value: cat, onChange: (e) => setCat(e.target.value) },
+          ["All"].concat(CAT_LIST).map((c) => h("option", { key: c, value: c }, c)))), h(ThemeToggle, { theme: theme, onToggle: toggleTheme }))),
+    h("div", { className: "tiles" },
+      h(Tile, { label: "Total spending", value: usd(total), note: filtered ? cat + " only" : "Across all three months" }),
+      h(Tile, { label: "Transactions", value: String(count), note: "Average " + usd(round2(total / count)) + " each" }),
+      filtered
+        ? h(Tile, { label: "Share of all spending", value: Math.round((total / grand) * 100) + "%", note: usd(total) + " of " + usd(grand) })
+        : h(Tile, { label: "Top category", value: topCat.name, note: usd(topCat.value) + " · " + Math.round((topCat.value / total) * 100) + "% of spending" })
+    ),
+    h("div", { className: "charts" },
+      h("div", { className: "panel" }, h("h2", null, "Spending per month" + tag),
+        h("div", { className: "chart-box", key: cat }, ok ? h(Boundary, { fallback: h(BarChartFallback) }, h(BarChartR)) : h(BarChartFallback))),
+      h("div", { className: "panel" }, h("h2", null, "Spending by category" + tag),
+        h("div", { className: "chart-box", key: cat }, ok ? h(Boundary, { fallback: h(DonutFallback) }, h(DonutR)) : h(DonutFallback)))
+    )
+  );
+}
+
+function start() {
+  try { ReactDOM.createRoot(document.getElementById("root")).render(h(App)); }
+  catch (e) { fatal(e && e.message); }
+}
+function loadRecharts(urls) {
+  if (window.Recharts || !urls.length) { R = window.Recharts || null; return start(); }
+  const sc = document.createElement("script");
+  sc.src = urls[0];
+  sc.onload = () => loadRecharts(window.Recharts ? [] : urls.slice(1));
+  sc.onerror = () => loadRecharts(urls.slice(1));
+  document.head.appendChild(sc);
+}
+loadRecharts([
+  "https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js",
+  "https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.js"
+]);
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Red Square</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1a1a1a; }
+  }
+  :root[data-theme="dark"] { --bg: #1a1a1a; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .square {
+    width: min(60vmin, 300px);
+    aspect-ratio: 1 / 1;
+    background: #e11d2e;
+  }
+</style>
+</head>
+<body>
+  <div class="square" role="img" aria-label="A red square"></div>
+</body>
+</html>
